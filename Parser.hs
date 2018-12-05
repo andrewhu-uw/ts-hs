@@ -185,6 +185,11 @@ extractIdent _ = Nothing
 removeSpaces :: String -> String  -- Remove spaces, but not newlines
 removeSpaces input = case input of
     "" -> ""
+    '/':('/':cs) -> removeSpaces (removeUpToNewline cs)
     c:"" -> if (isSpace c && c /= '\n') then "" else c:""
     c:cs -> if (isSpace c && c /= '\n') then removeSpaces cs else c : (removeSpaces cs)
 
+removeUpToNewline :: String -> String
+removeUpToNewline input
+  | head input == '\n' =  input
+  | otherwise = removeUpToNewline (tail input)
