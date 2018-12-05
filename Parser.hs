@@ -48,8 +48,8 @@ data Stmnt
   = Assign [String] Expr
   | CallStmnt [String] [Expr]
   | Init Stmnt Expr -- Stmnt must be DeclVar or DeclLet
-  | DeclVar String [String] -- String list is type name
-  | DeclLet String [String]
+  | DeclVar String String -- Type is only stored as one string for now
+  | DeclLet String String
   deriving Show
 
 stmnt :: ReadP Stmnt
@@ -66,15 +66,15 @@ decl :: ReadP Stmnt
 decl = do
   declType <- (string "var" <|> string "let")
   name <- munch1 isAlpha
-  typeName <- option ["any"] typedecl
+  typeName <- option "any" typedecl
   case declType of
     "var" -> return (DeclVar name typeName)
     "let" -> return (DeclLet name typeName)
 
-typedecl :: ReadP [String]
+typedecl :: ReadP String
 typedecl = do
   char ':'
-  sepBy1 (munch1 isAlpha) (char '.')
+  munch1 isAlpha -- type declarations only support one string types like 'string' and 'number' as of now
 
 call :: ReadP Expr
 call = do
