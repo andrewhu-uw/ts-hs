@@ -44,14 +44,14 @@ expr = (addsub <|> term <|> obj)
 
 data Stmnt
   = Assign [String] Expr
-  | CallStmnt Expr -- Function calls go here
+  | CallStmnt [String] [Expr]
   | Init Stmnt Expr -- Stmnt must be DeclVar or DeclLet
   | DeclVar String [String] -- String list is type name
   | DeclLet String [String]
   deriving Show
 
 stmnt :: ReadP Stmnt
-stmnt = (initialization <|> decl <|> assign <|> (call >>= (\callExpr -> return (CallStmnt callExpr))))
+stmnt = (initialization <|> decl <|> assign <|> (call >>= (\(Call name args) -> return (CallStmnt name args))))
 
 initialization :: ReadP Stmnt
 initialization = do
