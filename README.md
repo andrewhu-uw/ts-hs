@@ -9,3 +9,4 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
 ## TODO
 
  - Add single quote string constants
+ - Add comment support
