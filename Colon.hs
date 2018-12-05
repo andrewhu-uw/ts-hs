@@ -9,27 +9,6 @@ import qualified Data.HashMap.Strict as HM
 
 import Parser
 
--- Changelog: I *really* need to move this to git
--- Added string assignment functionality
--- Started on type checking, it can check one statement at a time, given the environment hashmap
-
--- I didn't build a real lexer, so input must be separated by ; or \n
-{- Note: Informal grammar notation mixes between BNF and ReadP syntax
-Block := sepBy1 (Stmnt <|> Stmnt ; <|> { Block } <|> function [name](params) { Block }) ('\n' <|> ';')
-Stmnt := Decl | Init | Ident = Expr | Expr
-Init := Decl = Expr
-Decl := var Ident [: Type] | let Ident [: Type]
-Type := any | number | string | object | Ident
-Expr := Term + Expr | Term - Expr | Term | Obj
-Obj := { sepBy ([a-Z]+: Expr) ','}
-Term := Factor * Term | Factor / Term | Factor | String
-String := " [a-Z,0-9,']* " | ' [a-Z,0-9,"] ' -- TODO add \" and \'
-Factor := ( Expr ) | Num | Ident | Call
-Call := Ident([Expr, Expr, ... Expr])
-Ident := sepBy1 [a-Z]+ '.'
-Num := [0..9]+
--}
-
 type VarName = [String] -- Identifier is the full path of the variable name
 data Type -- Type information
   = TypeString
