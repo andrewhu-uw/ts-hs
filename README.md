@@ -8,4 +8,4 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
 
 ## TODO
 
- - Implement array parsing
+ - Add single quote string constants

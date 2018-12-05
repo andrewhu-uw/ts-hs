@@ -11,7 +11,8 @@ Stmnt := Decl | Init | Ident = Expr | Expr
 Init := Decl = Expr
 Decl := var Ident [: Type] | let Ident [: Type]
 Type := any | number | string | object | Ident
-Expr := Term + Expr | Term - Expr | Term | Obj
+Expr := Term + Expr | Term - Expr | Term | Obj | Array
+Array := [ sepBy Expr ',' ]
 Obj := { sepBy ([a-Z]+: Expr) ','}
 Term := Factor * Term | Factor / Term | Factor | String
 String := " [a-Z,0-9,']* " | ' [a-Z,0-9,"] ' -- TODO add \" and \'
@@ -36,11 +37,12 @@ data Expr
   | Imm Int
   | Call [String] [Expr]
   | Obj [(String, Expr)] -- Object builder syntax
-  | InnerString String
+  | Array [Expr]
+  | StringConst String
   deriving Show
 
 expr :: ReadP Expr
-expr = (addsub <|> term <|> obj)
+expr = (addsub <|> term <|> obj <|> array)
 
 data Stmnt
   = Assign [String] Expr
@@ -126,6 +128,9 @@ sline = do
 obj :: ReadP Expr
 obj = between (char '{') (char '}') (sepBy jsonPair (char ',')) >>= \obj -> return (Obj obj)
 
+array :: ReadP Expr
+array = between (char '[') (char ']') (sepBy expr (char ',')) >>= \list -> return (Array list)
+
 jsonPair :: ReadP (String, Expr)
 jsonPair = do
   prop <- munch1 isAlpha
@@ -142,12 +147,12 @@ addsub = do
   return (Binop op left right)
 
 term :: ReadP Expr
-term = (muldiv <|> factor <|> innerString)
+term = (muldiv <|> factor <|> stringconst)
 
-innerString :: ReadP Expr
-innerString = do
+stringconst :: ReadP Expr
+stringconst = do
   inner <- between (char '"') (char '"') (munch1 isAlpha) -- TODO add support for single quote strings
-  return (InnerString inner)
+  return (StringConst inner)
 
 muldiv :: ReadP Expr
 muldiv = do
