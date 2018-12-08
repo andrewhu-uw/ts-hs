@@ -111,7 +111,7 @@ data Line
   = SLine Stmnt
   | FLine String [String] Line -- Last param will always try to parse a block line AKA {...}
   | BLine Block
-  | AcsrLine String (Maybe String) Block -- only has param if it's a setter
+  | AcsrLine String (Maybe Stmnt) Block -- only has param if it's a setter
   | CtorLine [(Bool, Stmnt)] Block -- List of params: (isPublic, Decl)
   deriving Show
 
@@ -119,11 +119,29 @@ block :: ReadP Block
 block = sepBy (sline <|> bline <|> fline) (munch1 (\c -> c == '\n' || c == ';'))
 
 classBlock :: ReadP Block
-classBlock = sepBy (method <|> (initialization <|> decl >>= \stmnt -> return (SLine stmnt))) (munch1 (\c -> c == '\n' || c == ';'))
+classBlock = sepBy
+             (method <|> getter <|> setter <|>
+                    (initialization <|> decl >>= \stmnt -> return (SLine stmnt))) -- Wrap the Stmnt as a Line
+             (munch1 (\c -> c == '\n' || c == ';'))
+
+setter :: ReadP Line
+setter = do
+  string "set"
+  name <- munch1 isAlpha
+  param <- between (char '(') (char ')') decl
+  body <- block
+  return (AcsrLine name (Just param) body)
+
+getter :: ReadP Line
+getter = do
+  string "get"
+  name <- munch1 isAlpha
+  char '(' >> char ')' -- TODO when you rework the lexer, check if this needs to be fixed
+  body <- block
+  return (AcsrLine name Nothing body)
 
 method :: ReadP Line
 method = do
-  string "function"
   name <- munch1 (isAlpha)
   params <- paramList
   body <- bline
