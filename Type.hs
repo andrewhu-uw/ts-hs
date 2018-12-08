@@ -14,10 +14,11 @@ data Type -- Type information
   | TypeNumber
   | TypeAny
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
-  | TypeClass -- Also should contain a map
+  | TypeClass SymbolTable -- env is the derived class fields, parent is the base class fields
   | TypeUnknown -- Just for debuggingm, a valid program should *never* have a variable with type unknown
   | TypeModule -- This also needs to contain a map
   deriving Show
+
 data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) deriving Show
 getType :: String -> SymbolTable -> Maybe Type
 getType varName (SymbolTable env parent) = case HM.lookup varName env of

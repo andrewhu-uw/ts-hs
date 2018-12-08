@@ -7,7 +7,10 @@ import Data.Char (isAlpha,isSpace,)
 -- I didn't build a real lexer, so input must be separated by ; or \n
 {- Note: Informal grammar notation mixes between BNF and ReadP syntax
 Block := sepBy1 (Stmnt <|> Stmnt ; <|> { Block } <|> function [name](params) { Block }) ('\n' <|> ';')
-Stmnt := Decl | Init | Ident = Expr | Expr
+Stmnt := Decl | Init | Ident = Expr | Expr | Class
+Class := { sepBy (Field | Accessor) ('\n' | ';') }
+Field := A method or property or constructor
+Accessor := set Ident ( Decl ) { Block } | get Ident ( Decl ) { Block }
 Init := Decl = Expr
 Decl := var Ident [: Type] | let Ident [: Type]
 Type := any | number | string | object | Ident
@@ -50,7 +53,16 @@ data Stmnt
   | Init Stmnt Expr -- Stmnt must be DeclVar or DeclLet
   | DeclVar String String -- Type is only stored as one string for now
   | DeclLet String String
+  | ClassStmnt Block -- Lines will only be methods, ctor, accessors, or decl/init
   deriving Show
+
+classDef :: ReadP Stmnt
+classDef = do
+  string "class"
+  char '{'
+  defs <- block -- TODO: fix this to only accept valid class definitions
+  char '}'
+  return (ClassStmnt defs)
 
 stmnt :: ReadP Stmnt
 stmnt = (initialization <|> decl <|> assign <|> (call >>= (\(Call name args) -> return (CallStmnt name args))))
@@ -98,8 +110,10 @@ assign = do
 type Block = [Line]
 data Line
   = SLine Stmnt
-  | FLine String [String] Line -- Will always try to parse a block line AKA {...}
+  | FLine String [String] Line -- Last param will always try to parse a block line AKA {...}
   | BLine Block
+  | AcsrLine String (Maybe String) Block -- only has param if it's a setter
+  | CtorLine [(Bool, Stmnt)] Block -- List of params: (isPublic, Decl)
   deriving Show
 
 block :: ReadP Block
