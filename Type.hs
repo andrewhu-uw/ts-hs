@@ -11,6 +11,7 @@ import Parser
 
 data Type -- Type information
   = TypeString
+  | TypeNumber
   | TypeAny
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
   | TypeClass -- Also should contain a map
@@ -41,9 +42,20 @@ checkInit decl val env = case decl of
 
 checkDecl :: String -> String -> HashMap String Type -> TCRes
 checkDecl name singleType env = case HM.lookup name env of
-                                  Nothing -> TCSuccess (insert name TypeUnknown env) -- TODO Fix the type being entered, it should translate the string into a type name, maybe looking it up in the environment
+                                  Nothing -> bindVar name singleType env -- TODO Fix the type being entered, it should translate the string into a type name, maybe looking it up in the environment
                                   Just entryType -> if typeEqual entryType singleType then TCSuccess env else TCFail "Subsequent variable declarations must have same type" env
-                             
+  
+bindVar :: String -> String -> HashMap String Type -> TCRes
+bindVar name singleType env = case castToType singleType env of
+                                TypeUnknown -> TCFail ( "Could not find type " ++ singleType ++ " in scope") env
+                                typeListing -> TCSuccess (insert name typeListing env)
+
+castToType :: String -> HashMap String Type -> Type
+castToType str env
+  | str == "string" = TypeString
+  | str == "number" = TypeNumber
+  | str == "any" = TypeAny
+  | otherwise = TypeUnknown
 
 typeEqual :: Type -> String -> Bool
 typeEqual t str = case t of
