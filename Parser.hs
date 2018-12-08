@@ -186,8 +186,14 @@ removeSpaces :: String -> String  -- Remove spaces, but not newlines
 removeSpaces input = case input of
     "" -> ""
     '/':('/':cs) -> removeSpaces (removeUpToNewline cs)
+    '/':('*':cs) -> removeSpaces (removeEndComment cs)
     c:"" -> if (isSpace c && c /= '\n') then "" else c:""
     c:cs -> if (isSpace c && c /= '\n') then removeSpaces cs else c : (removeSpaces cs)
+
+removeEndComment :: String -> String
+removeEndComment input
+  | take 2 input == "*/" = drop 2 input
+  | otherwise = removeEndComment (tail input)
 
 removeUpToNewline :: String -> String
 removeUpToNewline input
