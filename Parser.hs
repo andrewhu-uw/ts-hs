@@ -25,8 +25,7 @@ Ident := sepBy1 [a-Z]+ '.'
 Num := [0..9]+
 -}
 
--- e.g. runParser expr "(42)+5*9"
--- yields Just (Binop "+" (Imm 42) (Binop "*" Imm 5 Imm 9))
+-- e.g. runParser expr "(42)+5*9" yields Just (Binop "+" (Imm 42) (Binop "*" Imm 5 Imm 9))
 runParser :: ReadP a -> String -> Maybe a
 runParser parser input =
   let res = readP_to_S parser (removeSpaces input)  -- Use the magic function to parse string into list of possible parsing tuples
@@ -60,12 +59,12 @@ classDef :: ReadP Stmnt
 classDef = do
   string "class"
   char '{'
-  defs <- block -- TODO: fix this to only accept valid class definitions
+  defs <- classBlock -- TODO: fix this to only accept valid class definitions
   char '}'
   return (ClassStmnt defs)
 
 stmnt :: ReadP Stmnt
-stmnt = (initialization <|> decl <|> assign <|> (call >>= (\(Call name args) -> return (CallStmnt name args))))
+stmnt = (initialization <|> decl <|> assign <|> (call >>= (\(Call name args) -> return (CallStmnt name args))) <|> classDef)
 
 initialization :: ReadP Stmnt
 initialization = do
@@ -118,6 +117,17 @@ data Line
 
 block :: ReadP Block
 block = sepBy (sline <|> bline <|> fline) (munch1 (\c -> c == '\n' || c == ';'))
+
+classBlock :: ReadP Block
+classBlock = sepBy (method <|> (initialization <|> decl >>= \stmnt -> return (SLine stmnt))) (munch1 (\c -> c == '\n' || c == ';'))
+
+method :: ReadP Line
+method = do
+  string "function"
+  name <- munch1 (isAlpha)
+  params <- paramList
+  body <- bline
+  return (FLine name params body)
 
 fline :: ReadP Line
 fline = do
