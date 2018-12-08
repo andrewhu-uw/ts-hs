@@ -109,7 +109,7 @@ assign = do
 type Block = [Line]
 data Line
   = SLine Stmnt
-  | FLine String [String] Line -- Last param will always try to parse a block line AKA {...}
+  | FLine String [(String,String)] Line -- param list: (name, type)
   | BLine Block
   | AcsrLine String (Maybe Stmnt) Block -- only has param if it's a setter
   | CtorLine [(Bool, Stmnt)] Block -- List of params: (isPublic, Decl)
@@ -155,8 +155,11 @@ fline = do
   body <- bline
   return (FLine name params body)
 
-paramList :: ReadP [String]
-paramList = between (char '(') (char ')') (sepBy (munch1 isAlpha) (char ','))
+paramList :: ReadP [(String,String)]
+paramList = between (char '(') (char ')') (sepBy
+                                           -- TODO figure out a way to factor out this monstrosity
+                                           (munch1 isAlpha >>= (\name -> (option "any" (char ':' >> (munch1 isAlpha)) >>= (\typeName -> return (name, typeName)))))
+                                           (char ','))
 
 bline :: ReadP Line
 bline = between (char '{') (char '}') (block >>= (\b -> return (BLine b)))
