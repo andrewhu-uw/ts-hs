@@ -7,7 +7,7 @@ import Data.Char (isAlpha,isSpace,)
 -- I didn't build a real lexer, so input must be separated by ; or \n
 {- Note: Informal grammar notation mixes between BNF and ReadP syntax
 Block := sepBy1 (Stmnt <|> Stmnt ; <|> { Block } <|> function name (params) { Block } <|> return Expr) ('\n' <|> ';')
-Stmnt := Decl | Init | Ident = Expr | Expr | Class
+Stmnt := Decl | Init | Ident = Expr | if ( Expr ) { Block } [else { Block }]* | Expr | Class
 Class := { sepBy (Field | Accessor) ('\n' | ';') }
 Field := A method or property or constructor
 Accessor := set Ident ( Decl ) { Block } | get Ident ( Decl ) { Block }
@@ -52,6 +52,7 @@ data Stmnt
   | Init Stmnt Expr -- Stmnt must be DeclVar or DeclLet
   | DeclVar String String -- Type is only stored as one string for now
   | DeclLet String String
+  | IfStmnt Expr Block [(Expr, Block)] (Maybe Block)
   | ClassStmnt Block -- Lines will only be methods, ctor, accessors, or decl/init
   deriving Show
 
@@ -64,7 +65,21 @@ classDef = do
   return (ClassStmnt defs)
 
 stmnt :: ReadP Stmnt
-stmnt = (initialization <|> decl <|> assign <|> (call >>= (\(Call name args) -> return (CallStmnt name args))) <|> classDef)
+stmnt = (initialization <|> decl <|> assign <|> ifstmnt <|> (call >>= (\(Call name args) -> return (CallStmnt name args))) <|> classDef)
+
+ifstmnt :: ReadP Stmnt
+ifstmnt = do
+  (cond, thenBody) <- partialIf
+  elseIfs <- many (string "else" >> partialIf)
+  lastElse <- option Nothing (string "else" >> block >>= \b -> return (Just b))
+  return (IfStmnt cond thenBody elseIfs lastElse)
+
+partialIf :: ReadP (Expr, Block)
+partialIf = do
+  string "if"
+  cond <- between (char '(') (char ')') expr
+  thenBody <- between (char '{') (char '}') block -- TODO allow body without curlies
+  return (cond, thenBody)
 
 initialization :: ReadP Stmnt
 initialization = do
