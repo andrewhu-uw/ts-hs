@@ -109,7 +109,7 @@ assign = do
 type Block = [Line]
 data Line
   = SLine Stmnt
-  | FLine String [(String,String)] Line -- param list: (name, type)
+  | FLine String [(String,String)] String Line -- param list: (name, type)
   | BLine Block
   | AcsrLine String (Maybe Stmnt) Block -- only has param if it's a setter
   | CtorLine [(Bool, Stmnt)] Block -- List of params: (isPublic, Decl)
@@ -144,16 +144,18 @@ method :: ReadP Line
 method = do
   name <- munch1 (isAlpha)
   params <- paramList
+  ret <- option "any" typedecl
   body <- bline
-  return (FLine name params body)
+  return (FLine name params ret body)
 
 fline :: ReadP Line
 fline = do
   string "function"
   name <- option "" (munch1 isAlpha)
   params <- paramList
+  ret <- option "any" typedecl
   body <- bline
-  return (FLine name params body)
+  return (FLine name params ret body)
 
 paramList :: ReadP [(String,String)]
 paramList = between (char '(') (char ')') (sepBy

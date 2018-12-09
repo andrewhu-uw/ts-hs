@@ -8,9 +8,10 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
 
 ## TODO
 
- - Add single quote string constants
- - Add function return signature
- - Add class definitions
  - Add function types
  - Add field lookup tables to object type
  - Type check functions
+ - Type check classes/class properties
+
+ - Add other operators like +=
+ - Add single quote string constants
