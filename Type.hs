@@ -19,16 +19,20 @@ data Type -- Type information
   | TypeModule -- This also needs to contain a map
   deriving Show
 
-data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) deriving Show
+-- SymbolTable needs to map (a) local ids to types, (b) higher scope ids to types, (c) class names to their symbol tables
+data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) (HashMap String SymbolTable) deriving Show
+initSymbolTable = SymbolTable empty Nothing empty
+
 getType :: String -> SymbolTable -> Maybe Type
-getType varName (SymbolTable env parent) = case HM.lookup varName env of
-                                             Just bind -> Just bind
-                                             Nothing -> case parent of
-                                               Nothing -> Nothing
-                                               Just parent -> getType varName parent
+getType varName (SymbolTable env parent classes) =
+  case HM.lookup varName env of
+    Just bind -> Just bind
+    Nothing -> case parent of
+                 Nothing -> Nothing
+                 Just parent -> getType varName parent
 
 insert :: String -> Type -> SymbolTable -> SymbolTable
-insert name defType (SymbolTable env parent) = SymbolTable (HM.insert name defType env) parent
+insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert name defType env) parent classes
 
 data TCRes = TCSuccess SymbolTable | TCFail String SymbolTable deriving Show
 -- Automatically creates and accumulates the symbol table while traversing the AST
@@ -40,33 +44,35 @@ checkBlock block = error "Not implemented yet"
 
 checkStmnt :: Stmnt -> SymbolTable -> TCRes
 checkStmnt stmnt env = case stmnt of
-  DeclVar name singleType -> checkDecl name singleType env
-  DeclLet name singleType -> checkDecl name singleType env
+  DeclVar name varType -> checkDecl name varType env
+  DeclLet name varType -> checkDecl name varType env
   Init decl val -> checkInit decl val env
 
 -- TODO: Check that the type of the expression matches the declared type
 checkInit :: Stmnt -> Expr -> SymbolTable -> TCRes
 checkInit decl val env = case decl of
-  DeclVar name singleType -> checkDecl name singleType env
-  DeclLet name singleType -> checkDecl name singleType env
+  DeclVar name varType -> checkDecl name varType env
+  DeclLet name varType -> checkDecl name varType env
   _ -> TCFail "Invalid declaration in an init statement" env
 
 checkDecl :: String -> String -> SymbolTable -> TCRes
-checkDecl name singleType env = case getType name env of
-                                  Nothing -> bindVar name singleType env -- TODO Fix the type being entered, it should translate the string into a type name, maybe looking it up in the environment
-                                  Just entryType -> if typeEqual entryType singleType then TCSuccess env else TCFail "Subsequent variable declarations must have same type" env
+checkDecl name varType env = case getType name env of
+                                  Nothing -> bindVar name varType env
+                                  Just entryType -> if typeEqual entryType varType then TCSuccess env else TCFail "Subsequent variable declarations must have same type" env
   
 bindVar :: String -> String -> SymbolTable -> TCRes
-bindVar name singleType env = case castToType singleType env of
-                                TypeUnknown -> TCFail ( "Could not find type " ++ singleType ++ " in scope") env
+bindVar name varType env = case castToType varType env of
+                                TypeUnknown -> TCFail ( "Could not find type " ++ varType ++ " in scope") env
                                 typeListing -> TCSuccess (insert name typeListing env)
 
 castToType :: String -> SymbolTable -> Type
-castToType str env
-  | str == "string" = TypeString
-  | str == "number" = TypeNumber
-  | str == "any" = TypeAny
-  | otherwise = TypeUnknown
+castToType varType env = case varType of
+  "string" -> TypeString
+  "number" -> TypeNumber
+  "any" -> TypeAny
+  _ -> TypeUnknown -- for now assume this is a class, but it could be an array, using regexes here would be better
+
+
 
 typeEqual :: Type -> String -> Bool
 typeEqual t str = case t of
