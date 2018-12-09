@@ -6,7 +6,7 @@ import Data.Char (isAlpha,isSpace,)
 
 -- I didn't build a real lexer, so input must be separated by ; or \n
 {- Note: Informal grammar notation mixes between BNF and ReadP syntax
-Block := sepBy1 (Stmnt <|> Stmnt ; <|> { Block } <|> function [name](params) { Block }) ('\n' <|> ';')
+Block := sepBy1 (Stmnt <|> Stmnt ; <|> { Block } <|> function name (params) { Block } <|> return Expr) ('\n' <|> ';')
 Stmnt := Decl | Init | Ident = Expr | Expr | Class
 Class := { sepBy (Field | Accessor) ('\n' | ';') }
 Field := A method or property or constructor
@@ -14,7 +14,7 @@ Accessor := set Ident ( Decl ) { Block } | get Ident ( Decl ) { Block }
 Init := Decl = Expr
 Decl := var Ident [: Type] | let Ident [: Type]
 Type := any | number | string | object | Ident
-Expr := Term + Expr | Term - Expr | Term | Obj | Array
+Expr := Term + Expr | Term - Expr | Term | Obj | Array | function (params) { Block }
 Array := [ sepBy Expr ',' ]
 Obj := { sepBy ([a-Z]+: Expr) ','}
 Term := Factor * Term | Factor / Term | Factor | String
@@ -111,12 +111,18 @@ data Line
   = SLine Stmnt
   | FLine String [(String,String)] String Line -- param list: (name, type)
   | BLine Block
+  | RetLine Expr
   | AcsrLine String (Maybe Stmnt) Block -- only has param if it's a setter
   | CtorLine [(Bool, Stmnt)] Block -- List of params: (isPublic, Decl)
   deriving Show
 
 block :: ReadP Block
-block = sepBy (sline <|> bline <|> fline) (munch1 (\c -> c == '\n' || c == ';'))
+block = sepBy (sline <|> bline <|> fline <|> retline) (munch1 (\c -> c == '\n' || c == ';'))
+
+retline :: ReadP Line
+retline = do
+  string "return"
+  expr >>= \val -> optional (char ';') >> return (RetLine val)
 
 classBlock :: ReadP Block
 classBlock = sepBy
@@ -151,7 +157,7 @@ method = do
 fline :: ReadP Line
 fline = do
   string "function"
-  name <- option "" (munch1 isAlpha)
+  name <- munch1 isAlpha
   params <- paramList
   ret <- option "any" typedecl
   body <- bline

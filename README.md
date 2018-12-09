@@ -8,10 +8,14 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
 
 ## TODO
 
- - Add function types
+ - Add "return" keyword
+ - Add "if" statements
  - Add field lookup tables to object type
  - Type check functions
  - Type check classes/class properties
 
  - Add other operators like +=
  - Add single quote string constants
+ - Add function types
+ - Add readonly
+ - Add yields
