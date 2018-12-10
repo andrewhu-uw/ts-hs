@@ -15,12 +15,12 @@ data Type -- Type information
   | TypeAny
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
   | TypeClass SymbolTable -- env is the derived class fields, parent is the base class fields
-  | TypeUnknown -- Just for debuggingm, a valid program should *never* have a variable with type unknown
   | TypeModule -- This also needs to contain a map
-  deriving Show
+  | TypeUnknown -- Just for debuggingm, a valid program should *never* have a variable with type unknown
+  deriving (Show, Eq)
 
 -- SymbolTable needs to map (a) local ids to types, (b) higher scope ids to types, (c) class names to their symbol tables
-data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) (HashMap String SymbolTable) deriving Show
+data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) (HashMap String Type) deriving (Show, Eq)
 initSymbolTable = SymbolTable empty Nothing empty
 
 getType :: String -> SymbolTable -> Maybe Type
@@ -34,7 +34,12 @@ getType varName (SymbolTable env parent classes) =
 insert :: String -> Type -> SymbolTable -> SymbolTable
 insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert name defType env) parent classes
 
-data TCRes = TCSuccess SymbolTable | TCFail String SymbolTable deriving Show
+-- type checking needs to be able to (a) evaluate the type of a
+-- expression (b) relay an error message when something doesn't type check
+-- and (c) update the symbol tables
+-- On success, the type is the type of the evaluated expression. TBH, not sure why we need the symbol table if it fails
+-- TODO: I really gotta make this a monad
+data TCRes = TCSuccess SymbolTable Type | TCFail String SymbolTable deriving Show
 -- Automatically creates and accumulates the symbol table while traversing the AST
 runCheck :: a -> TCRes
 runCheck root = error "Not implemented yet"
@@ -55,18 +60,42 @@ checkInit decl val env = case decl of
   DeclLet name varType -> checkDecl name varType env
   _ -> TCFail "Invalid declaration in an init statement" env
 
+-- Do the type of this expression and the goal match?
+checkExpr :: Expr -> SymbolTable -> TCRes
+checkExpr e env = case e of
+  Binop op left right -> checkBinop op left right env
+  Imm int -> TCSuccess env TypeNumber
+
+checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
+checkBinop op left right env =
+  case op of
+    "+" -> checkPlus left right env
+
+checkPlus :: Expr -> Expr -> SymbolTable -> TCRes
+checkPlus left right env =
+  let leftRes = checkExpr left env
+      rightRes = checkExpr right env in
+    case (leftRes, rightRes) of
+      (TCFail reason env, _) -> TCFail reason env
+      (_, TCFail reason env) -> TCFail reason env
+      (TCSuccess _ leftType, TCSuccess _ rightType) -> 
+        if leftType == rightType && leftType == TypeNumber
+        then TCSuccess env TypeNumber
+        else TCFail "operator (+) cannot be used on expressions of different types or types that are not [number, string]" env
+
 checkDecl :: String -> String -> SymbolTable -> TCRes
-checkDecl name varType env = case getType name env of
-                                  Nothing -> bindVar name varType env
-                                  Just entryType -> if typeEqual entryType varType then TCSuccess env else TCFail "Subsequent variable declarations must have same type" env
+checkDecl name varType env =
+  case getType name env of
+    Nothing -> bindVar name varType env
+    Just entryType -> if strToType varType env  == entryType then TCSuccess env entryType else TCFail "Subsequent variable declarations must have same type" env
   
 bindVar :: String -> String -> SymbolTable -> TCRes
-bindVar name varType env = case castToType varType env of
-                                TypeUnknown -> TCFail ( "Could not find type " ++ varType ++ " in scope") env
-                                typeListing -> TCSuccess (insert name typeListing env)
+bindVar name varTypeString env = case strToType varTypeString env of
+                                TypeUnknown -> TCFail ( "Could not find type " ++ varTypeString ++ " in scope") env
+                                varType -> TCSuccess (insert name varType env) varType
 
-castToType :: String -> SymbolTable -> Type
-castToType varType env = case varType of
+strToType :: String -> SymbolTable -> Type
+strToType varType env = case varType of
   "string" -> TypeString
   "number" -> TypeNumber
   "any" -> TypeAny
