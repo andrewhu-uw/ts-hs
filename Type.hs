@@ -34,12 +34,12 @@ getType varName (SymbolTable env parent classes) =
 insert :: String -> Type -> SymbolTable -> SymbolTable
 insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert name defType env) parent classes
 
--- type checking needs to be able to (a) evaluate the type of a
+-- type checking needs to be able to (a) evaluate the type of an
 -- expression (b) relay an error message when something doesn't type check
--- and (c) update the symbol tables
--- On success, the type is the type of the evaluated expression. TBH, not sure why we need the symbol table if it fails
+-- On success, the type is the type of the evaluated expression.
+-- TBH, not sure why we need the symbol table at all, will probably just try to remove it soon
 -- TODO: I really gotta make this a monad
-data TCRes = TCSuccess SymbolTable Type | TCFail String SymbolTable deriving Show
+data TCRes = TCSuccess Type | TCFail String deriving Show
 -- Automatically creates and accumulates the symbol table while traversing the AST
 runCheck :: a -> TCRes
 runCheck root = error "Not implemented yet"
@@ -58,13 +58,13 @@ checkInit :: Stmnt -> Expr -> SymbolTable -> TCRes
 checkInit decl val env = case decl of
   DeclVar name varType -> checkDecl name varType env
   DeclLet name varType -> checkDecl name varType env
-  _ -> TCFail "Invalid declaration in an init statement" env
+  _ -> TCFail "Invalid declaration in an init statement" 
 
 -- Do the type of this expression and the goal match?
 checkExpr :: Expr -> SymbolTable -> TCRes
 checkExpr e env = case e of
   Binop op left right -> checkBinop op left right env
-  Imm int -> TCSuccess env TypeNumber
+  Imm int -> TCSuccess TypeNumber
 
 checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
 checkBinop op left right env =
@@ -76,23 +76,23 @@ checkPlus left right env =
   let leftRes = checkExpr left env
       rightRes = checkExpr right env in
     case (leftRes, rightRes) of
-      (TCFail reason env, _) -> TCFail reason env
-      (_, TCFail reason env) -> TCFail reason env
-      (TCSuccess _ leftType, TCSuccess _ rightType) -> 
+      (TCFail reason, _) -> TCFail reason
+      (_, TCFail reason) -> TCFail reason
+      (TCSuccess leftType, TCSuccess rightType) -> 
         if leftType == rightType && leftType == TypeNumber
-        then TCSuccess env TypeNumber
-        else TCFail "operator (+) cannot be used on expressions of different types or types that are not [number, string]" env
+        then TCSuccess TypeNumber
+        else TCFail "operator (+) cannot be used on expressions of different types or types that are not [number, string]" 
 
 checkDecl :: String -> String -> SymbolTable -> TCRes
 checkDecl name varType env =
   case getType name env of
     Nothing -> bindVar name varType env
-    Just entryType -> if strToType varType env  == entryType then TCSuccess env entryType else TCFail "Subsequent variable declarations must have same type" env
+    Just entryType -> if strToType varType env  == entryType then TCSuccess entryType else TCFail "Subsequent variable declarations must have same type" 
   
 bindVar :: String -> String -> SymbolTable -> TCRes
 bindVar name varTypeString env = case strToType varTypeString env of
-                                TypeUnknown -> TCFail ( "Could not find type " ++ varTypeString ++ " in scope") env
-                                varType -> TCSuccess (insert name varType env) varType
+                                TypeUnknown -> TCFail ( "Could not find type " ++ varTypeString ++ " in scope") 
+                                varType -> TCSuccess varType
 
 strToType :: String -> SymbolTable -> Type
 strToType varType env = case varType of
