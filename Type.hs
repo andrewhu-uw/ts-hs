@@ -1,6 +1,6 @@
 module Colon where
 
-import Control.Monad.Except
+import Control.Monad.Except hiding (Maybe)
 import Text.ParserCombinators.ReadP
 import Control.Applicative ((<|>),)
 import Data.Char (isAlpha,isSpace,)
@@ -24,12 +24,12 @@ data Type -- Type information
 data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) (HashMap String Type) deriving (Show, Eq)
 initSymbolTable = SymbolTable empty Nothing empty
 
-getType :: String -> SymbolTable -> Maybe Type
+getType :: String -> SymbolTable -> TCRes
 getType varName (SymbolTable env parent classes) =
   case HM.lookup varName env of
-    Just bind -> Just bind
+    Just bind -> return bind
     Nothing -> case parent of
-                 Nothing -> Nothing
+                 Nothing -> tcfail $ "Could not find type of identifier `"++varName++"`"
                  Just parent -> getType varName parent
 
 insert :: String -> Type -> SymbolTable -> SymbolTable
@@ -38,15 +38,7 @@ insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert na
 -- type checking needs to be able to (a) evaluate the type of an
 -- expression (b) relay an error message when something doesn't type check
 -- On success, the type is the type of the evaluated expression.
--- TODO: I really gotta make this a monad
-data TCRes'  = TCSuccess' Type | TCFail' String deriving Show
 data TCResA a = TCSuccess a | TCFail String deriving Show
-
--- I want to be able to write this:
-
--- leftTy <- checkExpr left
--- rightTy <- checkExpr right
--- if leftTy == rightTy then TCSuccess leftTy else TCFail "Types must be equal"
 
 instance Monad TCResA where
   return = TCSuccess
@@ -55,22 +47,8 @@ instance Monad TCResA where
 
 type TCRes = TCResA Type
 
-testError :: TCRes
-testError = TCFail "Hey, this is a test error"
-
-checkLeft :: TCRes
-checkLeft = TCSuccess TypeString
-
-checkRight :: TCRes
-checkRight = TCSuccess TypeNumber
-
-useError :: TCRes
-useError = do
-  left <- checkLeft
-  right <- checkRight
-  case (left, right) of
-    (TypeAny,_) -> TCFail "Cannot be of type 'any'"
-    (TypeString, _) -> TCSuccess TypeString
+tcfail :: String -> TCRes
+tcfail = TCFail
 
 -- Automatically creates and accumulates the symbol table while traversing the AST
 runCheck :: a -> TCRes
@@ -101,11 +79,11 @@ checkExpr e env = case e of
 
 checkIdent :: [String] -> SymbolTable -> TCRes
 checkIdent [] env = TCFail "Compiler error: Identifier was empty"
-checkIdent (parent:children) env = case getType parent env of
-  Nothing -> TCFail ("Could not find identifier `" ++ parent ++ "`")
-  Just parent_t -> case parent_t of
-                     TypeClass subenv -> checkIdent children subenv
-                     _ -> TCSuccess parent_t
+checkIdent (parent:children) env = do
+  parentTy <- getType parent env
+  case parentTy of
+    TypeClass subenv -> checkIdent children subenv
+    _ -> return parentTy
 
 checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
 checkBinop "+" left right env = checkPlus left right env
@@ -121,28 +99,15 @@ checkPlus leftexp rightexp env = do
            (_, TypeAny) -> return TypeAny
            (TypeString, TypeNumber) -> return TypeString
            (TypeNumber, TypeString) -> return TypeString
-           _ -> TCFail $ "Operator (+) could not coerce "++ show left ++" and "++ show right
-{-
-checkPlus left right env =
-  let leftRes = checkExpr left env
-      rightRes = checkExpr right env in
-    case (leftRes, rightRes) of
-      (TCFail reason, _) -> TCFail reason
-      (_, TCFail reason) -> TCFail reason
-      (TCSuccess leftTy, TCSuccess rightTy) -> 
-        if leftTy == rightTy
-        then TCSuccess leftTy
-        else if leftTy == TypeString || rightTy == TypeString
-             then TCSuccess TypeString
-             else if leftTy == TypeAny || rightTy == TypeAny
-                  then TCSuccess TypeAny
-                  else TCFail
--}
+           _ -> tcfail $ "Operator (+) could not coerce "++ show left ++" and "++ show right
+
 checkDecl :: String -> String -> SymbolTable -> TCRes
 checkDecl name varType env =
   case getType name env of
-    Nothing -> bindVar name varType env
-    Just entryType -> if strToType varType env  == entryType then TCSuccess entryType else TCFail "Subsequent variable declarations must have same type" 
+    TCFail _ -> bindVar name varType env
+    TCSuccess entryType -> if strToType varType env == entryType
+                           then return entryType
+                           else tcfail "Subsequent variable declarations must have same type" 
   
 bindVar :: String -> String -> SymbolTable -> TCRes
 bindVar name varTypeString env = case strToType varTypeString env of
