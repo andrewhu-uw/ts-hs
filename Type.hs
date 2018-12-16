@@ -1,5 +1,6 @@
 module Colon where
 
+import Control.Monad.Except
 import Text.ParserCombinators.ReadP
 import Control.Applicative ((<|>),)
 import Data.Char (isAlpha,isSpace,)
@@ -38,7 +39,39 @@ insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert na
 -- expression (b) relay an error message when something doesn't type check
 -- On success, the type is the type of the evaluated expression.
 -- TODO: I really gotta make this a monad
-data TCRes = TCSuccess Type | TCFail String deriving Show
+data TCRes'  = TCSuccess' Type | TCFail' String deriving Show
+data TCResA a = TCSuccess a | TCFail String deriving Show
+
+-- I want to be able to write this:
+
+-- leftTy <- checkExpr left
+-- rightTy <- checkExpr right
+-- if leftTy == rightTy then TCSuccess leftTy else TCFail "Types must be equal"
+
+instance Monad TCResA where
+  return = TCSuccess
+  TCFail reason >>= _ = TCFail reason
+  TCSuccess val >>= k = k val
+
+type TCRes = TCResA Type
+
+testError :: TCRes
+testError = TCFail "Hey, this is a test error"
+
+checkLeft :: TCRes
+checkLeft = TCSuccess TypeString
+
+checkRight :: TCRes
+checkRight = TCSuccess TypeNumber
+
+useError :: TCRes
+useError = do
+  left <- checkLeft
+  right <- checkRight
+  case (left, right) of
+    (TypeAny,_) -> TCFail "Cannot be of type 'any'"
+    (TypeString, _) -> TCSuccess TypeString
+
 -- Automatically creates and accumulates the symbol table while traversing the AST
 runCheck :: a -> TCRes
 runCheck root = error "Not implemented yet"
@@ -78,6 +111,18 @@ checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
 checkBinop "+" left right env = checkPlus left right env
 
 checkPlus :: Expr -> Expr -> SymbolTable -> TCRes
+checkPlus leftexp rightexp env = do
+  left <- checkExpr leftexp env
+  right <- checkExpr rightexp env
+  if left == right
+    then return left
+    else case (left, right) of
+           (TypeAny, _) -> return TypeAny
+           (_, TypeAny) -> return TypeAny
+           (TypeString, TypeNumber) -> return TypeString
+           (TypeNumber, TypeString) -> return TypeString
+           _ -> TCFail $ "Operator (+) could not coerce "++ show left ++" and "++ show right
+{-
 checkPlus left right env =
   let leftRes = checkExpr left env
       rightRes = checkExpr right env in
@@ -91,8 +136,8 @@ checkPlus left right env =
              then TCSuccess TypeString
              else if leftTy == TypeAny || rightTy == TypeAny
                   then TCSuccess TypeAny
-                  else TCFail $ "Operator (+) could not coerce "++ show leftTy++" and "++ show rightTy
-
+                  else TCFail
+-}
 checkDecl :: String -> String -> SymbolTable -> TCRes
 checkDecl name varType env =
   case getType name env of
