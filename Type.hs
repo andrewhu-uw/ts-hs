@@ -84,10 +84,14 @@ checkPlus left right env =
     case (leftRes, rightRes) of
       (TCFail reason, _) -> TCFail reason
       (_, TCFail reason) -> TCFail reason
-      (TCSuccess leftType, TCSuccess rightType) -> 
-        if leftType == rightType && leftType == TypeNumber
-        then TCSuccess TypeNumber
-        else TCFail "operator (+) cannot be used on expressions of different types or types that are not [number, string]" 
+      (TCSuccess leftTy, TCSuccess rightTy) -> 
+        if leftTy == rightTy
+        then TCSuccess leftTy
+        else if leftTy == TypeString || rightTy == TypeString
+             then TCSuccess TypeString
+             else if leftTy == TypeAny || rightTy == TypeAny
+                  then TCSuccess TypeAny
+                  else TCFail $ "Operator (+) could not coerce "++ show leftTy++" and "++ show rightTy
 
 checkDecl :: String -> String -> SymbolTable -> TCRes
 checkDecl name varType env =
