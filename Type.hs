@@ -16,7 +16,7 @@ data Type -- Type information
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
   | TypeClass SymbolTable -- env is the derived class fields, parent is the base class fields
   | TypeModule -- This also needs to contain a map
-  | TypeUnknown -- Just for debuggingm, a valid program should *never* have a variable with type unknown
+  | TypeUnknown -- Just for debugging, a valid program should *never* have a variable with type unknown
   deriving (Show, Eq)
 
 -- SymbolTable needs to map (a) local ids to types, (b) higher scope ids to types, (c) class names to their symbol tables
@@ -37,7 +37,6 @@ insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert na
 -- type checking needs to be able to (a) evaluate the type of an
 -- expression (b) relay an error message when something doesn't type check
 -- On success, the type is the type of the evaluated expression.
--- TBH, not sure why we need the symbol table at all, will probably just try to remove it soon
 -- TODO: I really gotta make this a monad
 data TCRes = TCSuccess Type | TCFail String deriving Show
 -- Automatically creates and accumulates the symbol table while traversing the AST
@@ -65,11 +64,18 @@ checkExpr :: Expr -> SymbolTable -> TCRes
 checkExpr e env = case e of
   Binop op left right -> checkBinop op left right env
   Imm int -> TCSuccess TypeNumber
+  Ident strs -> checkIdent strs env
+
+checkIdent :: [String] -> SymbolTable -> TCRes
+checkIdent [] env = TCFail "Compiler error: Identifier was empty"
+checkIdent (parent:children) env = case getType parent env of
+  Nothing -> TCFail ("Could not find identifier `" ++ parent ++ "`")
+  Just parent_t -> case parent_t of
+                     TypeClass subenv -> checkIdent children subenv
+                     _ -> TCSuccess parent_t
 
 checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
-checkBinop op left right env =
-  case op of
-    "+" -> checkPlus left right env
+checkBinop "+" left right env = checkPlus left right env
 
 checkPlus :: Expr -> Expr -> SymbolTable -> TCRes
 checkPlus left right env =
@@ -100,8 +106,6 @@ strToType varType env = case varType of
   "number" -> TypeNumber
   "any" -> TypeAny
   _ -> TypeUnknown -- for now assume this is a class, but it could be an array, using regexes here would be better
-
-
 
 typeEqual :: Type -> String -> Bool
 typeEqual t str = case t of
