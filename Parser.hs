@@ -14,7 +14,7 @@ Accessor := set Ident ( Decl ) { Block } | get Ident ( Decl ) { Block }
 Init := Decl = Expr
 Decl := var Ident [: Type] | let Ident [: Type]
 Type := any | number | string | object | Ident
-Expr := Term + Expr | Term - Expr | Term | Obj | Array | function (params) { Block }
+Expr := Term + Expr | Term - Expr | Term | Obj | Array | function (params) { Block } | "true" | "false"
 Array := [ sepBy Expr ',' ]
 Obj := { sepBy ([a-Z]+: Expr) ','}
 Term := Factor * Term | Factor / Term | Factor | String
@@ -41,10 +41,11 @@ data Expr
   | Obj [(String, Expr)] -- Object builder syntax
   | Array [Expr]
   | StringConst String
+  | Boolean Bool
   deriving Show
 
 expr :: ReadP Expr
-expr = (addsub <|> term <|> obj <|> array)
+expr = (addsub <|> term <|> obj <|> array <|> bool)
 
 data Stmnt
   = Assign [String] Expr
@@ -206,7 +207,6 @@ jsonPair = do
   right <- expr
   return (prop, right)
 
-
 addsub :: ReadP Expr
 addsub = do
   left <- term
@@ -215,7 +215,7 @@ addsub = do
   return (Binop op left right)
 
 term :: ReadP Expr
-term = (muldiv <|> factor <|> stringconst)
+term = (muldiv <|> factor <|> stringconst <|> bool)
 
 stringconst :: ReadP Expr
 stringconst = do
@@ -240,6 +240,9 @@ num :: ReadP Expr
 num = do
   str <- munch1 (\c -> c >= '0' && c <= '9')
   return (Imm (read str))
+
+bool :: ReadP Expr
+bool = (string "true" <|> string "false") >>= \str -> if str == "true" then return (Boolean True) else return (Boolean False)
 
 ident :: ReadP Expr
 ident = do

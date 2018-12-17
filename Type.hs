@@ -14,6 +14,7 @@ data Type -- Type information
   = TypeString
   | TypeNumber
   | TypeAny
+  | TypeBool
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
   | TypeClass SymbolTable -- env is the derived class fields, parent is the base class fields
   | TypeModule -- This also needs to contain a map
@@ -29,7 +30,7 @@ getType varName (SymbolTable env parent classes) =
   case HM.lookup varName env of
     Just bind -> return bind
     Nothing -> case parent of
-                 Nothing -> tcfail $ "Could not find type of identifier `"++varName++"`"
+                 Nothing -> fail $ "Could not find type of identifier `"++varName++"`"
                  Just parent -> getType varName parent
 
 insert :: String -> Type -> SymbolTable -> SymbolTable
@@ -44,11 +45,9 @@ instance Monad TCResA where
   return = TCSuccess
   TCFail reason >>= _ = TCFail reason
   TCSuccess val >>= k = k val
+  fail reason = TCFail reason
 
 type TCRes = TCResA Type
-
-tcfail :: String -> TCRes
-tcfail = TCFail
 
 -- Automatically creates and accumulates the symbol table while traversing the AST
 runCheck :: a -> TCRes
@@ -99,7 +98,7 @@ checkPlus leftexp rightexp env = do
            (_, TypeAny) -> return TypeAny
            (TypeString, TypeNumber) -> return TypeString
            (TypeNumber, TypeString) -> return TypeString
-           _ -> tcfail $ "Operator (+) could not coerce "++ show left ++" and "++ show right
+           _ -> fail $ "Operator (+) could not coerce "++ show left ++" and "++ show right
 
 checkDecl :: String -> String -> SymbolTable -> TCRes
 checkDecl name varType env =
@@ -107,7 +106,7 @@ checkDecl name varType env =
     TCFail _ -> bindVar name varType env
     TCSuccess entryType -> if strToType varType env == entryType
                            then return entryType
-                           else tcfail "Subsequent variable declarations must have same type" 
+                           else fail "Subsequent variable declarations must have same type" 
   
 bindVar :: String -> String -> SymbolTable -> TCRes
 bindVar name varTypeString env = case strToType varTypeString env of
