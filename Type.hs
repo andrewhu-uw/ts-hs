@@ -1,4 +1,4 @@
-module Colon where
+module Type where
 
 import Control.Monad.Except hiding (Maybe)
 import Text.ParserCombinators.ReadP
@@ -16,25 +16,29 @@ data Type -- Type information
   | TypeAny
   | TypeBool
   | TypeObj -- Only for temp objects. This needs to contain the hashmap from prop names to types
-  | TypeClass SymbolTable -- env is the derived class fields, parent is the base class fields
+  | TypeClass String SymbolTable -- env is the derived class fields, parent is the base class fields
   | TypeModule -- This also needs to contain a map
   | TypeUnknown -- Just for debugging, a valid program should *never* have a variable with type unknown
   deriving (Show, Eq)
 
 -- SymbolTable needs to map (a) local ids to types, (b) higher scope ids to types, (c) class names to their symbol tables
-data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) (HashMap String Type) deriving (Show, Eq)
-initSymbolTable = SymbolTable empty Nothing empty
+data SymbolTable = SymbolTable (HashMap String Type) (Maybe SymbolTable) deriving (Show, Eq)
+initSymbolTable = SymbolTable empty Nothing 
 
 getType :: String -> SymbolTable -> TCRes
-getType varName (SymbolTable env parent classes) =
-  case HM.lookup varName env of
-    Just bind -> return bind
+getType varName (SymbolTable env parent) = let (id, fields) = splitAtDot varName in
+  case HM.lookup id env of
+    Just bind -> case bind of
+                   TypeClass className fieldEnv -> case getType fields fieldEnv of
+                                                TCFail reason -> fail $ "Could not find type of field `"++id++"` in class `"++className++"`"
+                                                x -> x
+                   _ -> return bind
     Nothing -> case parent of
-                 Nothing -> fail $ "Could not find type of identifier `"++varName++"`"
+                 Nothing -> fail $ "Could not find type of identifier `"++id++"`"
                  Just parent -> getType varName parent
 
 insert :: String -> Type -> SymbolTable -> SymbolTable
-insert name defType (SymbolTable env parent classes) = SymbolTable (HM.insert name defType env) parent classes
+insert name defType (SymbolTable env parent) = SymbolTable (HM.insert name defType env) parent
 
 -- type checking needs to be able to (a) evaluate the type of an
 -- expression (b) relay an error message when something doesn't type check
@@ -82,7 +86,7 @@ checkIdent [] env = TCFail "Compiler error: Identifier was empty"
 checkIdent (parent:children) env = do
   parentTy <- getType parent env
   case parentTy of
-    TypeClass subenv -> checkIdent children subenv
+    TypeClass className subenv -> checkIdent children subenv
     _ -> return parentTy
 
 checkBinop :: String -> Expr -> Expr -> SymbolTable -> TCRes
@@ -121,10 +125,9 @@ strToType varType env = case varType of
   "any" -> TypeAny
   _ -> TypeUnknown -- for now assume this is a class, but it could be an array, using regexes here would be better
 
-typeEqual :: Type -> String -> Bool
-typeEqual t str = case t of
-  TypeString -> str == "string"
-  _ -> False
-
+splitAtDot :: String -> (String,String)
+splitAtDot "" = ([],[])
+splitAtDot ('.':cs) = ([],cs)
+splitAtDot (c:cs) = (c:bf,af) where (bf,af) = splitAtDot cs
 
 
