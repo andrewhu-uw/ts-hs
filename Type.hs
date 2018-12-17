@@ -73,7 +73,8 @@ checkInit decl val env = case decl of
 checkExpr :: Expr -> SymbolTable -> TCRes
 checkExpr e env = case e of
   Binop op left right -> checkBinop op left right env
-  Imm int -> TCSuccess TypeNumber
+  Imm _ -> return TypeNumber
+  Boolean _ -> return TypeBool
   Ident strs -> checkIdent strs env
 
 checkIdent :: [String] -> SymbolTable -> TCRes

@@ -8,8 +8,6 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
 
 ## TODO
 
- - Write your own lexer/parser
-
  - Add expression type checking
  - Add field lookup tables to object type
  - Type check functions
@@ -20,3 +18,5 @@ Just a cool project I'm working on to learn Haskell, parser combinators, and Typ
  - Add function types/lambdas
  - Add readonly
  - Add yields
+
+ - Write your own lexer/parser
