@@ -3,6 +3,7 @@ module Parser where
 import Text.ParserCombinators.ReadP
 import Control.Applicative ((<|>),)
 import Data.Char (isAlpha,isSpace,)
+import Data.List (isPrefixOf)
 
 -- I didn't build a real lexer, so input must be separated by ; or \n
 {- Note: Informal grammar notation mixes between BNF and ReadP syntax
@@ -254,12 +255,22 @@ extractIdent (Ident ss) = Just ss
 extractIdent _ = Nothing
 
 removeSpaces :: String -> String  -- Remove spaces, but not newlines
-removeSpaces input = case input of
-    "" -> ""
-    '/':('/':cs) -> removeSpaces (removeUpToNewline cs)
-    '/':('*':cs) -> removeSpaces (removeEndComment cs)
-    c:"" -> if (isSpace c && c /= '\n') then "" else c:""
-    c:cs -> if (isSpace c && c /= '\n') then removeSpaces cs else c : (removeSpaces cs)
+removeSpaces input
+  | input == "" = ""
+  | isPrefixOf "//" input = removeSpaces (removeUpToNewline cs)
+  | isPrefixOf "/*" input = removeSpaces (removeEndComment cs)
+  | isPrefixOf "return" input = "return" ++ removeSpaces (insertSemicolon $ drop 6 input)
+  | isPrefixOf "break" input = "break" ++ removeSpaces (insertSemicolon $ drop 5 input) -- Technically break and continue can take arguments
+  | isPrefixOf "continue" input = "continue" ++ removeSpaces (insertSemicolon $ drop 8 input)
+  | isPrefixOf "throw" input = "throw" ++ removeSpaces (insertSemicolon $ drop 5 input)
+  | cs == "" = if (isSpace c && c /= '\n') then "" else c:"" 
+  | otherwise = if (isSpace c && c /= '\n') then removeSpaces cs else c : (removeSpaces cs)
+  where c = head input
+        cs = tail input
+
+insertSemicolon :: String -> String  -- If the rest of the characters on this line are whitespace, then insert a return, otherwise do nothing
+insertSemicolon ('\n':cs) = ";\n" ++ cs
+insertSemicolon (c:cs) = if isSpace c then insertSemicolon cs else c:cs
 
 removeEndComment :: String -> String
 removeEndComment input

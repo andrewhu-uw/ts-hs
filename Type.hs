@@ -49,7 +49,7 @@ instance Monad TCResA where
   return = TCSuccess
   TCFail reason >>= _ = TCFail reason
   TCSuccess val >>= k = k val
-  fail reason = TCFail reason
+  fail  = TCFail 
 
 type TCRes = TCResA Type
 
